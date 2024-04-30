@@ -1,0 +1,149 @@
+Install Docker
+Install Python 3.10
+Install Miniconda
+All of these can be found in the Pre-requisites folder.
+
+Go to the main directory
+docker compose up -d
+Go to chatgpt-retrival-plugin directory
+pip install poetry
+
+In main directory run
+docker run -p 8000:3000 -e MILVUS_URL={milvus server IP - usually localhost}:19530 zilliz/attu:v2.3.5
+
+Now you can manage the milvus db at http://localhost:8000
+
+You only need to enter the IP and Port, to find your IP
+windows cmd prompt = ipconfig
+mac terminal = ifconfig
+Enter the IPv4 address and connect in Attu.
+
+Edit the .env file at root directory of chatgpt-retrieval-plugin
+at the root directory of your chatgpt-retrieval-plugin folder
+Go to -> https://jwt.io/
+Create a BEARER_TOKEN
+
+Fill out the details in the .env file
+
+Example (Not my real keys but an example for you)
+------------------
+DATASTORE = milvus
+BEARER_TOKEN = eyJhbciOiIUzI1NiIsInR5c6IkpXVCJ9.eyJzdWIiOixMjM0NTY3ODkwIiasdtZSI6Ik1SIiwiaWF0IjoxNTE2M5MDIyfQ.gOsJd2_HvyaAa_7yVsLqwJwUIOVUg2eByCrcasd
+OPENAI_API_KEY = sk-eQwDkzZxLyEYgeknZt6T3BlbasdJsd8X3fnvV6TZfhasd
+MILVUS_HOST = localhost
+MILVUS_PORT = 19530
+------------------
+More details can be found in chatgpt-retrieval-plugin/docs/providers/milvus
+
+Enter miniconda,
+in the chatgpt-retrieval-plugin directory
+run -> poetry shell
+run -> poetry install
+run -> pip install pymilvus
+run -> pip install arrow
+
+run -> python ./tests/datastore/providers/milvus/test_milvus_datastore.py
+
+No errors? Okay you're set up!
+Got errors? Okay, your turn to fix stuff :)
+
+https://github.com/openai/chatgpt-retrieval-plugin/blob/main/README.md
+https://milvus.io/docs
+https://docs.conda.io/en/latest/
+https://docs.docker.com/
+https://python-poetry.org/docs/
+https://docs.pytest.org/en/7.1.x/contents.html
+
+Now make a collection in Milvus
+
+curl -X 'POST' \
+  '${MILVUS_HOST}:${MILVUS_PORT}/v1/vector/collections/create' \
+  -H 'Authorization: Bearer ${TOKEN}' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+       "dbName": "default",   
+       "collectionName": "medium_articles",
+       "dimension": 1536,
+       "metricType": "L2",
+       "primaryField": "id",
+       "vectorField": "vector"
+      }'
+
+Or use Attu
+Name:Test
+Description:Test
+Primary Key Field:id
+Type:INT64
+Description:Test
+Vector Field:vector
+Type:Float Vector
+Description:Test
+Dimension:1536
+
+Use 1536 as Dimensions, this is important because the openai embedding
+model uses 1536 and these have to match.
+
+Now add your collection name (replace my example)
+MILVUS_COLLECTION = c4734f1ff2b5345cca72f758f27fceb24
+to the .env file
+
+
+
+Take a look at the folder "interface_helpers" in the root directory of the project.
+Update "secrets.py" with the appropiate key and token, they should match your .env file.
+
+Now, make sure everything is running and services are not competing for ports.
+Inside interface_helpers, in miniconda/poetry, you can run
+python database_utils.py
+
+Now everything in the data/affixes.txt text file or data2/affixes.txt file will be uploaded as vectors to Milvus after being embedded by the
+openai embedding model. You can confirm this in the Milvus UI.
+
+
+in chunks.py you can configure vector related settings
+
+CHUNK_SIZE = 20  # The target size of each text chunk in tokens
+MIN_CHUNK_SIZE_CHARS = 10  # The minimum size of each text chunk in characters
+MIN_CHUNK_LENGTH_TO_EMBED = 0  # Discard chunks shorter than this
+EMBEDDINGS_BATCH_SIZE = int(os.environ.get("OPENAI_EMBEDDING_BATCH_SIZE", 128))  # The number of embeddings to request at a time
+MAX_NUM_CHUNKS = 100  # The maximum number of chunks to generate from a text
+
+Another configuration input exists in database_utils.py
+SEARCH_TOP_K = 1, this defines how many vectors you want to take off the top.
+
+If you are having issues with your openai key then you may need to run this
+set OPENAI_API_KEY=value
+In your poetryshell
+
+
+
+You can play around with get_text_chunks and other functions in chunks.py to change how chunking works.
+For example, I have one which chunks based on many different boundaries and one which chunks based on new lines.
+
+As my purpose is to have the model remember the ranges for every stat in a particular game, the data source I am using
+describes the range of each stat on each new line
+Having each chunk be a line of text in this case is perfect since when the vectors for certain words like "strength" align,
+those chunks which contain strength will be returned a long with the range of that stat.
+Now this is used as pre-context for a usual prompt to openai's LLM.
+
+Cool, now my LLM basically knows every single stat range of this game, that's impossible to achieve with a vector database
+currently.
+
+Let's use another example, I want to know something about a book I have written myself, the book contains 500 pages
+of information which I have written last week.
+
+There is no way for any LLM to know anything about my book unless it is specifically trained on the data over long periods of time.
+
+With this set up, I can just inject my book into Milvus as vectors, now when I ask a question, anything related to my
+question will be found and added to pre context of my prompt, as long as it's configured correctly, it should give me
+back relevant information for example, if page 253 spoke about my train ride and what I ate on that train, if I asked
+about experiences on a train within the book, then information from page 253 should be pulled in as pre context.
+
+Remember if you don't set MILVUS_COLLECTION in .env, then everytime you make a change or the plugin runs again,
+a new collection will be made which can be confusing as your vectors will be gone.
+
+
+
+
+
